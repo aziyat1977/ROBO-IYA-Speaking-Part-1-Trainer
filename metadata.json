@@ -1,0 +1,7 @@
+{
+  "name": "SpeakFlow Ultra",
+  "description": "A high-performance, offline speaking practice platform with dynamic SVG visuals and audio feedback.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
