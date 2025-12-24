@@ -1,19 +1,35 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 
 interface AudioVisualizerProps {
     isActive: boolean;
+    isRecording: boolean;
 }
 
-export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) => {
+export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, isRecording }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
-    // Initialize with null to fix "Expected 1 arguments, but got 0" error
     const animationRef = useRef<number | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
+    // Responsive Canvas Resizer
     useEffect(() => {
-        if (isActive && !stream) {
+        const resize = () => {
+            if (canvasRef.current && containerRef.current) {
+                canvasRef.current.width = containerRef.current.offsetWidth;
+                canvasRef.current.height = containerRef.current.offsetHeight;
+            }
+        };
+        window.addEventListener('resize', resize);
+        resize();
+        return () => window.removeEventListener('resize', resize);
+    }, []);
+
+    // 1. Manage Audio Stream Lifecycle
+    useEffect(() => {
+        if (isRecording && !stream) {
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(audioStream => {
                     setStream(audioStream);
@@ -21,27 +37,36 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) =>
                     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
                     audioContextRef.current = audioCtx;
                     const analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 64; // Low res for cleaner "bars"
+                    analyser.fftSize = 64; 
                     analyserRef.current = analyser;
 
                     const source = audioCtx.createMediaStreamSource(audioStream);
                     source.connect(analyser);
-
-                    visualize();
                 })
                 .catch(err => console.error("Mic access denied", err));
-        } else if (!isActive && stream) {
+        } else if (!isRecording && stream) {
             stream.getTracks().forEach(track => track.stop());
             setStream(null);
             if (animationRef.current) cancelAnimationFrame(animationRef.current);
-            if (audioContextRef.current) audioContextRef.current.close();
+            if (audioContextRef.current) {
+                audioContextRef.current.close();
+                audioContextRef.current = null;
+            }
+            analyserRef.current = null;
         }
+    }, [isRecording]); 
 
-        return () => {
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            if (animationRef.current) cancelAnimationFrame(animationRef.current);
-        };
-    }, [isActive]);
+    // 2. Manage Visualization Loop
+    useEffect(() => {
+        if (isActive && stream && analyserRef.current) {
+            visualize();
+        } else {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+                animationRef.current = null;
+            }
+        }
+    }, [isActive, stream]);
 
     const visualize = () => {
         if (!canvasRef.current || !analyserRef.current) return;
@@ -54,27 +79,25 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) =>
         const dataArray = new Uint8Array(bufferLength);
 
         const draw = () => {
-            if (!analyserRef.current) return;
+            if (!analyserRef.current || !canvasRef.current) return;
+            
             animationRef.current = requestAnimationFrame(draw);
             analyserRef.current.getByteFrequencyData(dataArray);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const barWidth = (canvas.width / bufferLength) * 2.5;
-            let barHeight;
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                barHeight = (dataArray[i] / 2); // Scale down
+                const barHeight = (dataArray[i] / 255) * canvas.height;
 
-                // Dynamic color based on height/volume
                 const r = barHeight + 25 * (i / bufferLength);
                 const g = 250 * (i / bufferLength);
                 const b = 50;
 
                 ctx.fillStyle = `rgb(${r},${g},${b})`;
                 
-                // Rounded bars
                 ctx.beginPath();
                 if (typeof ctx.roundRect === 'function') {
                     ctx.roundRect(x, canvas.height - barHeight, barWidth, barHeight, 5);
@@ -91,11 +114,20 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) =>
     };
 
     return (
-        <div className={`transition-opacity duration-500 ${isActive ? 'opacity-100' : 'opacity-0'} h-16 w-full flex items-center justify-center`}>
+        <div ref={containerRef} className={`transition-all duration-500 h-20 w-full flex flex-col items-center justify-center gap-2`}>
             {isActive ? (
-                <canvas ref={canvasRef} width={300} height={60} className="rounded-lg" />
+                <canvas ref={canvasRef} className="rounded-lg w-full h-full" />
             ) : (
-                <div className="text-gray-400 text-sm animate-pulse">Tap microphone to speak</div>
+                <div className="flex flex-col items-center justify-center h-full w-full">
+                     {isRecording ? (
+                         <div className="flex items-center gap-2 text-yellow-500 font-bold animate-pulse">
+                             <span className="text-2xl">⏸</span>
+                             <span>Recording Paused</span>
+                         </div>
+                     ) : (
+                        <div className="text-gray-400 text-sm animate-pulse">Tap microphone to speak</div>
+                     )}
+                </div>
             )}
         </div>
     );

@@ -1,8 +1,10 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 export const useSpeechSequence = (text: string) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [available, setAvailable] = useState(false);
+    const [rate, setRate] = useState(0.9);
     const synth = useRef(window.speechSynthesis);
     const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
@@ -39,16 +41,37 @@ export const useSpeechSequence = (text: string) => {
         const females = pool.filter(v => isFemale(v.name));
         const others = pool.filter(v => !isMale(v.name) && !isFemale(v.name));
 
-        // Strategy: Get 3 distinct personas
-        // Persona 1: Female IELTS Examiner (Standard)
-        // Persona 2: Male IELTS Examiner (Deeper)
-        // Persona 3: 2nd Female IELTS Examiner (Distinct or slightly higher pitch)
-
         let voiceF1 = females[0] || others[0] || pool[0];
         let voiceM1 = males[0] || others.find(v => v !== voiceF1) || pool.find(v => v !== voiceF1) || voiceF1;
         let voiceF2 = females[1] || others.find(v => v !== voiceF1 && v !== voiceM1) || voiceF1;
 
         return { voiceF1, voiceM1, voiceF2 };
+    };
+
+    const speakCustom = (textToSpeak: string, voiceType: 'F1' | 'M1' | 'F2', speed: number = 0.9, pitch: number = 1.0) => {
+        if (!available) return;
+        synth.current.cancel(); // Stop current
+        setIsPlaying(true);
+
+        const { voiceF1, voiceM1, voiceF2 } = getTargetVoices();
+        let targetVoice = voiceF1;
+        
+        if (voiceType === 'M1') targetVoice = voiceM1;
+        else if (voiceType === 'F2') targetVoice = voiceF2;
+
+        const u = new SpeechSynthesisUtterance(textToSpeak);
+        if (targetVoice) u.voice = targetVoice;
+        u.rate = speed;
+        u.pitch = pitch;
+
+        // Fallback pitch adjustments if voices are dupes
+        if (voiceType === 'M1' && targetVoice === voiceF1) u.pitch = 0.7;
+        if (voiceType === 'F2' && targetVoice === voiceF1) u.pitch = 1.1;
+
+        u.onend = () => setIsPlaying(false);
+        u.onerror = () => setIsPlaying(false);
+
+        synth.current.speak(u);
     };
 
     const speak = () => {
@@ -59,35 +82,25 @@ export const useSpeechSequence = (text: string) => {
 
         const { voiceF1, voiceM1, voiceF2 } = getTargetVoices();
 
-        // Helper to create "IELTS Examiner" style utterance
-        // Rate 0.85-0.9 for clear, articulate, authoritative pronunciation
         const createUtterance = (voice: SpeechSynthesisVoice | undefined, txt: string, pitch: number) => {
             const u = new SpeechSynthesisUtterance(txt);
             if (voice) u.voice = voice;
-            u.rate = 0.9; 
+            u.rate = rate; 
             u.pitch = pitch;
             return u;
         };
 
-        // 1. Female Voice (Standard)
         const u1 = createUtterance(voiceF1, text, 1.0);
-        
-        // 2. Male Voice (Slightly deeper/authoritative)
-        // If the voice is actually the same object as F1 (fallback), drop pitch significantly to simulate male
         const isFakeMale = voiceM1 === voiceF1;
         const u2 = createUtterance(voiceM1, text, isFakeMale ? 0.7 : 0.9);
-
-        // 3. Second Female Voice
-        // If same as F1, raise pitch slightly to simulate a different woman
         const isSameFemale = voiceF2 === voiceF1;
         const u3 = createUtterance(voiceF2, text, isSameFemale ? 1.1 : 1.0);
 
-        // Chain the sequence
         u1.onend = () => {
             setTimeout(() => {
                 if (synth.current.speaking || synth.current.pending) return;
                 synth.current.speak(u2);
-            }, 600); // Distinct pause between examiners
+            }, 600);
         };
 
         u2.onend = () => {
@@ -114,15 +127,13 @@ export const useSpeechSequence = (text: string) => {
         setIsPlaying(false);
     };
 
-    // Cleanup
     useEffect(() => {
         return () => synth.current.cancel();
     }, []);
 
-    // Stop on slide change (text change)
     useEffect(() => {
         stop();
     }, [text]);
 
-    return { isPlaying, speak, stop, available };
+    return { isPlaying, speak, stop, available, rate, setRate, speakCustom };
 };

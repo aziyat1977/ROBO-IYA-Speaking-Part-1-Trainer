@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 
 // Declaration for TS to recognize webkitSpeechRecognition
@@ -47,10 +48,25 @@ export const useSpeechRecognition = () => {
             };
 
             recognition.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
+                console.error("Speech recognition error:", event.error);
+                if (event.error === 'network') {
+                    console.warn("Network error detected. If offline, ensure your OS supports offline dictation (e.g. macOS/iOS).");
+                }
+                // Don't stop state immediately on 'no-speech' to avoid flicker
+                if (event.error !== 'no-speech') {
+                    setIsListening(false);
+                }
+            };
+
+            recognition.onend = () => {
+                // If we didn't explicitly stop (and no error occurred), we might want to restart?
+                // For now, let's just sync state.
+                // setIsListening(false); // Managed by start/stop
             };
 
             recognitionRef.current = recognition;
+        } else {
+            console.warn("Speech Recognition API not supported in this browser.");
         }
     }, []);
 
@@ -58,17 +74,22 @@ export const useSpeechRecognition = () => {
         setTranscript(''); // Clear previous
         if (recognitionRef.current) {
             try {
+                // Check if already started to prevent error
                 recognitionRef.current.start();
                 setIsListening(true);
             } catch(e) {
-                console.error(e);
+                console.warn("Recognition already started or failed to start", e);
             }
         }
     };
 
     const stopListening = () => {
         if (recognitionRef.current) {
-            recognitionRef.current.stop();
+            try {
+                recognitionRef.current.stop();
+            } catch(e) {
+                // ignore
+            }
             setIsListening(false);
         }
     };

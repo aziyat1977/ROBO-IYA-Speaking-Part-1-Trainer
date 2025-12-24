@@ -1,7 +1,9 @@
+
 export enum SlideType {
     Question = 'Question',
     Answer = 'Answer',
-    Reasoning = 'Reasoning'
+    Reasoning = 'Reasoning',
+    Pronunciation = 'Pronunciation Trainer'
 }
 
 export interface SlideContent {
