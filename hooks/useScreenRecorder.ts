@@ -2,12 +2,17 @@ import { useState, useRef } from 'react';
 
 export const useScreenRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [mediaBlobUrl, setMediaBlobUrl] = useState<string | null>(null);
+    
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const streamRef = useRef<MediaStream | null>(null);
 
     const startRecording = async () => {
         try {
+            setMediaBlobUrl(null);
+            
             // 1. Get Microphone Stream (Essential)
             const micStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { echoCancellation: true, noiseSuppression: true } 
@@ -16,16 +21,13 @@ export const useScreenRecorder = () => {
             let combinedStream = micStream;
 
             // 2. Try Get Screen Stream (Visuals)
-            // Note: getDisplayMedia is not supported on all mobile browsers.
-            // We check for existence.
             if (navigator.mediaDevices && (navigator.mediaDevices as any).getDisplayMedia) {
                 try {
                     const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
                         video: { cursor: "always" },
-                        audio: false // We prioritize mic audio
+                        audio: false 
                     });
                     
-                    // Combine Mic Audio + Screen Video
                     const tracks = [
                         ...screenStream.getVideoTracks(),
                         ...micStream.getAudioTracks()
@@ -33,13 +35,11 @@ export const useScreenRecorder = () => {
                     combinedStream = new MediaStream(tracks);
                 } catch (screenErr) {
                     console.warn("Screen recording cancelled or failed, falling back to audio only.", screenErr);
-                    // Fallback to mic only (already set)
                 }
             }
 
             streamRef.current = combinedStream;
 
-            // Detect MIME type support
             let mimeType = '';
             if (MediaRecorder.isTypeSupported('video/webm; codecs=vp9')) {
                 mimeType = 'video/webm; codecs=vp9';
@@ -49,11 +49,10 @@ export const useScreenRecorder = () => {
                 mimeType = 'video/mp4';
             }
 
-            // If we are audio-only, adjust mime
             if (combinedStream.getVideoTracks().length === 0) {
                  if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
                  else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
-                 else mimeType = ''; // Browser default
+                 else mimeType = '';
             }
 
             const options = mimeType ? { mimeType } : undefined;
@@ -70,15 +69,7 @@ export const useScreenRecorder = () => {
                 const type = chunksRef.current[0]?.type || 'video/webm';
                 const blob = new Blob(chunksRef.current, { type });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                
-                const ext = type.includes('audio') ? 'webm' : 'webm'; // Default to webm for broad compatibility
-                a.download = `speakflow-recording-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.${ext}`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                setMediaBlobUrl(url);
                 
                 // Stop all tracks
                 if (streamRef.current) {
@@ -86,16 +77,18 @@ export const useScreenRecorder = () => {
                 }
             };
 
-            // If user stops screen share via browser UI
+            // Handle user stopping via browser UI
             combinedStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                     mediaRecorderRef.current.stop();
                     setIsRecording(false);
+                    setIsPaused(false);
                 }
             });
 
             recorder.start();
             setIsRecording(true);
+            setIsPaused(false);
 
         } catch (err) {
             console.error("Recording error:", err);
@@ -105,11 +98,46 @@ export const useScreenRecorder = () => {
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
+            setIsPaused(false);
         }
     };
 
-    return { isRecording, startRecording, stopRecording };
+    const pauseRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.pause();
+            setIsPaused(true);
+        }
+    };
+
+    const resumeRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+            mediaRecorderRef.current.resume();
+            setIsPaused(false);
+        }
+    };
+
+    const downloadRecording = () => {
+        if (!mediaBlobUrl) return;
+        const a = document.createElement('a');
+        a.href = mediaBlobUrl;
+        const isAudio = mediaBlobUrl.includes('audio'); // simplistic check, mostly webm video
+        a.download = `speakflow-session-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    return { 
+        isRecording, 
+        isPaused, 
+        startRecording, 
+        stopRecording, 
+        pauseRecording, 
+        resumeRecording,
+        mediaBlobUrl,
+        downloadRecording
+    };
 };

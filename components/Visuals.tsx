@@ -32,10 +32,13 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     const floatClass = active ? "animate-float-fast" : "animate-float";
     const spinClass = active ? "animate-spin-fast" : "animate-spin-slow";
 
+    // Increased opacity for Dark Mode (dark:opacity-50 instead of 40) for better visibility
+    const containerClass = "absolute inset-0 w-full h-full opacity-30 dark:opacity-50 transition-all duration-1000";
+
     // TOPIC 1: HOMETOWN
     if (topic === 'Hometown') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-30 dark:opacity-40 transition-all duration-1000" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <svg className={containerClass} viewBox="0 0 100 100" preserveAspectRatio="none">
                 <defs>
                     <linearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={colors[0]} />
@@ -70,7 +73,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 2: MIRRORS
     if (topic === 'Mirrors') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-40 transition-all duration-1000" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <svg className={containerClass} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
                 <defs>
                     <filter id="blurMe">
                         <feGaussianBlur in="SourceGraphic" stdDeviation={active ? "0.5" : (mode === 1 ? "2" : "0")} />
@@ -103,7 +106,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 3: SITTING
     if (topic === 'Sitting') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-30 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                 {[0, 1, 2].map(row => (
                     [0, 1, 2, 3].map(col => (
                         <g key={`${row}-${col}`} transform={`translate(${col * 25 + 5}, ${row * 30 + 10})`}>
@@ -133,7 +136,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 4: WORK
     if (topic === 'Work/Studies') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-20 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                  <g transform="translate(20,20)">
                     {/* Spin faster and change color when active */}
                     <circle 
@@ -169,7 +172,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 5: OLD BUILDINGS
     if (topic === 'Old Buildings') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-40 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                 {[10, 30, 50, 70, 90].map(x => (
                     <rect key={x} x={x} y="20" width="5" height="80" fill={colors[2]} opacity="0.5" />
                 ))}
@@ -200,7 +203,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 6: COFFEE
      if (topic === 'Coffee & Tea') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-30 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                 <g className={active ? "animate-spin-fast" : (mode >= 1 ? "animate-[spin_60s_linear_infinite]" : "")}>
                     {[...Array(10)].map((_, i) => (
                         <ellipse 
@@ -230,7 +233,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 7: SMALL BUSINESSES
     if (topic === 'Small Businesses') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-30 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                 {/* Factories Background */}
                 <path d="M 10 80 L 10 30 L 25 30 L 25 50 L 40 30 L 40 80 Z" fill={colors[1]} opacity={mode >= 1 ? "0.2" : "0.5"} />
                 <rect x="15" y="10" width="5" height="20" fill={colors[1]} opacity="0.3" className={floatClass} />
@@ -256,7 +259,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 8: MAKING LISTS
     if (topic === 'Making Lists') {
         return (
-            <svg className="absolute inset-0 w-full h-full opacity-20 transition-all duration-1000" viewBox="0 0 100 100">
+            <svg className={containerClass} viewBox="0 0 100 100">
                 {/* Note pads */}
                 <rect x="10" y="20" width="30" height="40" fill={colors[1]} rx="2" className={mode === 2 ? "opacity-0 transition-opacity duration-1000" : ""} />
                 {/* Phone */}
@@ -286,7 +289,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 9: STORIES
     if (topic === 'Stories') {
         return (
-             <svg className="absolute inset-0 w-full h-full opacity-30 transition-all duration-1000" viewBox="0 0 100 100">
+             <svg className={containerClass} viewBox="0 0 100 100">
                  {/* Open Book */}
                  <path d="M 10 70 Q 30 80 50 70 Q 70 80 90 70 L 90 40 Q 70 50 50 40 Q 30 50 10 40 Z" fill={colors[1]} opacity="0.5" />
                  
@@ -311,7 +314,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
     // TOPIC 10: MACHINES
     if (topic === 'Machines') {
         return (
-             <svg className="absolute inset-0 w-full h-full opacity-20 transition-all duration-1000" viewBox="0 0 100 100">
+             <svg className={containerClass} viewBox="0 0 100 100">
                  {/* Circuit lines - Flash on audio */}
                  <path d="M 10 10 L 10 90 M 90 10 L 90 90" stroke={active ? colors[3] : colors[1]} strokeWidth={active ? "2" : "1"} className="transition-colors duration-200" />
                  <path d="M 10 50 L 90 50" stroke={active ? colors[3] : colors[1]} strokeWidth={active ? "2" : "1"} className="transition-colors duration-200" />
@@ -344,7 +347,7 @@ export const BackgroundVisual: React.FC<VisualProps> = ({ topic, mode, active })
 
     // Default Fallback
     return (
-        <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100">
+        <svg className={containerClass} viewBox="0 0 100 100">
              <rect width="100" height="100" fill={colors[0]} />
              <circle cx="50" cy="50" r="40" fill={colors[1]} opacity={active ? "0.8" : "0.5"} className={pulseClass} />
         </svg>
