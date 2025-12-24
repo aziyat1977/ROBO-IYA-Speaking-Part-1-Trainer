@@ -4,6 +4,7 @@ import { BackgroundVisual } from './components/Visuals';
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { AudioControls } from './components/AudioControls';
 import { useSpeechSequence } from './hooks/useSpeechSequence';
+import { useScreenRecorder } from './hooks/useScreenRecorder';
 import { SlideType } from './types';
 
 function App() {
@@ -20,8 +21,9 @@ function App() {
 
   // Hoist speech state to interact with visuals
   const { isPlaying: isTeacherPlaying, speak, stop, available: isSpeechAvailable } = useSpeechSequence(fullTextToRead);
+  const { isRecording, startRecording, stopRecording } = useScreenRecorder();
   
-  const isVisualActive = isTeacherPlaying || isMicActive;
+  const isVisualActive = isTeacherPlaying || isMicActive || isRecording;
 
   // Keyboard navigation
   useEffect(() => {
@@ -52,6 +54,14 @@ function App() {
     document.documentElement.classList.toggle('dark');
   };
 
+  const handleRecordToggle = () => {
+      if (isRecording) {
+          stopRecording();
+      } else {
+          startRecording();
+      }
+  };
+
   return (
     <div className={`h-full w-full flex flex-col relative overflow-hidden font-sans ${isDark ? 'dark' : ''}`}>
       
@@ -73,6 +83,30 @@ function App() {
         </div>
         
         <div className="flex items-center gap-4">
+          {/* RECORDING BUTTON */}
+          <button
+            onClick={handleRecordToggle}
+            className={`
+                flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all shadow-lg
+                ${isRecording 
+                    ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 ring-2 ring-red-400 ring-offset-2 ring-offset-transparent' 
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}
+            `}
+            title="Record Session (Screen & Mic)"
+          >
+            {isRecording ? (
+                <>
+                    <span className="w-3 h-3 bg-white rounded-sm animate-spin"></span>
+                    <span className="hidden md:inline">Recording...</span>
+                </>
+            ) : (
+                <>
+                    <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                    <span className="hidden md:inline">Rec</span>
+                </>
+            )}
+          </button>
+
           <button 
             onClick={toggleTheme} 
             className="p-2 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-white hover:scale-110 transition-transform"
@@ -129,7 +163,7 @@ function App() {
           <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-col gap-6">
               
-              <AudioVisualizer isActive={isMicActive} />
+              <AudioVisualizer isActive={isMicActive || isRecording} />
 
               <div className="flex items-center justify-center gap-8">
                 {/* Teacher Audio Button */}
