@@ -7,7 +7,8 @@ interface AudioVisualizerProps {
 export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
-    const animationRef = useRef<number>();
+    // Initialize with null to fix "Expected 1 arguments, but got 0" error
+    const animationRef = useRef<number | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -75,7 +76,11 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive }) =>
                 
                 // Rounded bars
                 ctx.beginPath();
-                ctx.roundRect(x, canvas.height - barHeight, barWidth, barHeight, 5);
+                if (typeof ctx.roundRect === 'function') {
+                    ctx.roundRect(x, canvas.height - barHeight, barWidth, barHeight, 5);
+                } else {
+                    ctx.rect(x, canvas.height - barHeight, barWidth, barHeight);
+                }
                 ctx.fill();
 
                 x += barWidth + 2;

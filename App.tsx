@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ALL_SLIDES } from './constants';
 import { BackgroundVisual } from './components/Visuals';
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { AudioControls } from './components/AudioControls';
+import { useSpeechSequence } from './hooks/useSpeechSequence';
 import { SlideType } from './types';
 
 function App() {
@@ -14,10 +15,13 @@ function App() {
   const currentSlide = ALL_SLIDES[currentIndex];
   const progress = ((currentIndex + 1) / ALL_SLIDES.length) * 100;
   
-  // Construct the full text for the teacher to read (Question + Answer/Reasoning)
-  // Clean up any "Q:" or "A:" prefixes for smoother natural reading if desired, 
-  // but keeping them is fine for structure. Let's make it natural.
-  const fullTextToRead = `${currentSlide.text}. ${currentSlide.subText ? currentSlide.subText.replace(/Q:|A:|R:/g, '') : ''}`;
+  // Construct text for reading: removes Q:/A:/R: prefixes for natural flow
+  const fullTextToRead = `${currentSlide.text} ${currentSlide.subText ? currentSlide.subText.replace(/Q:|A:|R:/g, '') : ''}`;
+
+  // Hoist speech state to interact with visuals
+  const { isPlaying: isTeacherPlaying, speak, stop, available: isSpeechAvailable } = useSpeechSequence(fullTextToRead);
+  
+  const isVisualActive = isTeacherPlaying || isMicActive;
 
   // Keyboard navigation
   useEffect(() => {
@@ -53,7 +57,7 @@ function App() {
       
       {/* BACKGROUND LAYER */}
       <div className="absolute inset-0 z-0 bg-white dark:bg-gray-900 transition-colors duration-500">
-        <BackgroundVisual topic={currentSlide.topic} mode={currentSlide.visualMode} />
+        <BackgroundVisual topic={currentSlide.topic} mode={currentSlide.visualMode} active={isVisualActive} />
         {/* Vignette */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900 opacity-80 pointer-events-none" />
       </div>
@@ -129,7 +133,11 @@ function App() {
 
               <div className="flex items-center justify-center gap-8">
                 {/* Teacher Audio Button */}
-                <AudioControls text={fullTextToRead} />
+                <AudioControls 
+                  isPlaying={isTeacherPlaying} 
+                  onToggle={() => isTeacherPlaying ? stop() : speak()} 
+                  available={isSpeechAvailable} 
+                />
 
                 {/* Mic Button */}
                 <button

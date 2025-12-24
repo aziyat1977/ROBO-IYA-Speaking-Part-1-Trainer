@@ -7,7 +7,7 @@ export const useSpeechSequence = (text: string) => {
     const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
     const loadVoices = useCallback(() => {
-        let voices = synth.current.getVoices();
+        const voices = synth.current.getVoices();
         if (voices.length > 0) {
             voicesRef.current = voices;
             setAvailable(true);
@@ -21,79 +21,86 @@ export const useSpeechSequence = (text: string) => {
         }
     }, [loadVoices]);
 
-    // Heuristic to find British Male/Female voices
     const getTargetVoices = () => {
         const all = voicesRef.current;
-        // Prioritize GB/UK, then general English
+        
+        // Filter for British English first, then general English
         let pool = all.filter(v => v.lang.includes('GB') || v.lang.includes('UK') || v.lang === 'en-GB');
         if (pool.length === 0) pool = all.filter(v => v.lang.startsWith('en'));
 
-        const isMale = (name: string) => 
-            name.toLowerCase().includes('male') || 
-            ['daniel', 'george', 'arthur', 'gordon', 'aaron'].some(n => name.toLowerCase().includes(n));
-            
-        const isFemale = (name: string) => 
-            name.toLowerCase().includes('female') || 
-            ['susan', 'hazel', 'stephanie', 'martha', 'catherine', 'samantha', 'zira'].some(n => name.toLowerCase().includes(n));
+        // Keywords to identify gender in voice names
+        const maleKeywords = ['male', 'daniel', 'george', 'arthur', 'gordon', 'aaron', 'james'];
+        const femaleKeywords = ['female', 'susan', 'hazel', 'stephanie', 'martha', 'catherine', 'samantha', 'zira', 'amy'];
+
+        const isMale = (name: string) => maleKeywords.some(k => name.toLowerCase().includes(k));
+        const isFemale = (name: string) => femaleKeywords.some(k => name.toLowerCase().includes(k));
 
         const males = pool.filter(v => isMale(v.name));
         const females = pool.filter(v => isFemale(v.name));
         const others = pool.filter(v => !isMale(v.name) && !isFemale(v.name));
 
-        // Selection Logic: F1 -> M1 -> F2
-        // Fallback strategy: if specific gender missing, use available pool but vary pitch
-        const f1 = females[0] || others[0] || pool[0];
-        const m1 = males[0] || others.find(v => v !== f1) || pool.find(v => v !== f1) || f1;
-        const f2 = females[1] || others.find(v => v !== f1 && v !== m1) || f1; // Try to get a different female, else repeat f1
+        // Strategy: Get 3 distinct personas
+        // Persona 1: Female IELTS Examiner (Standard)
+        // Persona 2: Male IELTS Examiner (Deeper)
+        // Persona 3: 2nd Female IELTS Examiner (Distinct or slightly higher pitch)
 
-        return { f1, m1, f2 };
+        let voiceF1 = females[0] || others[0] || pool[0];
+        let voiceM1 = males[0] || others.find(v => v !== voiceF1) || pool.find(v => v !== voiceF1) || voiceF1;
+        let voiceF2 = females[1] || others.find(v => v !== voiceF1 && v !== voiceM1) || voiceF1;
+
+        return { voiceF1, voiceM1, voiceF2 };
     };
 
     const speak = () => {
         if (!text || !available) return;
 
-        synth.current.cancel(); // Stop anything currently playing
+        synth.current.cancel();
         setIsPlaying(true);
 
-        const { f1, m1, f2 } = getTargetVoices();
-        const utteranceSettings = {
-            rate: 0.9, // Slower, clear "teacher" pace
-            pitch: 1.0,
-        };
+        const { voiceF1, voiceM1, voiceF2 } = getTargetVoices();
 
-        const createUtterance = (voice: SpeechSynthesisVoice | undefined, txt: string, pitchMod: number = 0) => {
+        // Helper to create "IELTS Examiner" style utterance
+        // Rate 0.85-0.9 for clear, articulate, authoritative pronunciation
+        const createUtterance = (voice: SpeechSynthesisVoice | undefined, txt: string, pitch: number) => {
             const u = new SpeechSynthesisUtterance(txt);
             if (voice) u.voice = voice;
-            u.rate = utteranceSettings.rate;
-            u.pitch = utteranceSettings.pitch + pitchMod;
+            u.rate = 0.9; 
+            u.pitch = pitch;
             return u;
         };
 
-        // Sequence: F1 -> M1 -> F2
-        const u1 = createUtterance(f1, text);
-        const u2 = createUtterance(m1, text, -0.1); // Slightly lower pitch for male/contrast
-        const u3 = createUtterance(f2, text);
+        // 1. Female Voice (Standard)
+        const u1 = createUtterance(voiceF1, text, 1.0);
+        
+        // 2. Male Voice (Slightly deeper/authoritative)
+        // If the voice is actually the same object as F1 (fallback), drop pitch significantly to simulate male
+        const isFakeMale = voiceM1 === voiceF1;
+        const u2 = createUtterance(voiceM1, text, isFakeMale ? 0.7 : 0.9);
 
+        // 3. Second Female Voice
+        // If same as F1, raise pitch slightly to simulate a different woman
+        const isSameFemale = voiceF2 === voiceF1;
+        const u3 = createUtterance(voiceF2, text, isSameFemale ? 1.1 : 1.0);
+
+        // Chain the sequence
         u1.onend = () => {
-             // Small pause between speakers
-             setTimeout(() => {
-                 if (synth.current.speaking || synth.current.pending) return; // Edge case safety
-                 synth.current.speak(u2);
-             }, 500);
+            setTimeout(() => {
+                if (synth.current.speaking || synth.current.pending) return;
+                synth.current.speak(u2);
+            }, 600); // Distinct pause between examiners
         };
 
         u2.onend = () => {
             setTimeout(() => {
                 if (synth.current.speaking || synth.current.pending) return;
                 synth.current.speak(u3);
-            }, 500);
+            }, 600);
         };
 
         u3.onend = () => {
             setIsPlaying(false);
         };
-        
-        // Handle interruptions/errors
+
         const handleError = () => setIsPlaying(false);
         u1.onerror = handleError;
         u2.onerror = handleError;
@@ -107,12 +114,12 @@ export const useSpeechSequence = (text: string) => {
         setIsPlaying(false);
     };
 
-    // Stop audio when component unmounts or text changes
+    // Cleanup
     useEffect(() => {
         return () => synth.current.cancel();
     }, []);
-    
-    // Stop if text changes (navigating slides)
+
+    // Stop on slide change (text change)
     useEffect(() => {
         stop();
     }, [text]);
