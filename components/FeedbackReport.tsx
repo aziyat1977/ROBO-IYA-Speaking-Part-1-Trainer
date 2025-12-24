@@ -11,6 +11,43 @@ interface Props {
 export const FeedbackReport: React.FC<Props> = ({ data, mediaUrl, onDownload, onClose }) => {
     if (!data) return null;
 
+    // Helper to render transcript with highlighting
+    const renderTranscript = () => {
+        const text = data.transcript || "No speech detected...";
+        const words = text.split(' ');
+        
+        return words.map((word, idx) => {
+            const cleanWord = word.replace(/[.,!?]/g, '').toLowerCase();
+            
+            // Check for mistakes
+            const mistake = data.mistakes.find(m => m.text.toLowerCase().includes(cleanWord) && m.type !== 'fluency');
+            
+            // Check for advanced vocab
+            const isAdvanced = data.criteria.lr.advancedWordsUsed.includes(cleanWord);
+
+            if (mistake) {
+                return (
+                    <span key={idx} className="inline-block mx-0.5 relative group cursor-help text-red-600 font-semibold decoration-red-400 underline underline-offset-2 decoration-wavy">
+                        {word}
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-red-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            {mistake.issue}
+                        </span>
+                    </span>
+                );
+            }
+
+            if (isAdvanced) {
+                return (
+                    <span key={idx} className="inline-block mx-0.5 text-emerald-600 font-bold border-b-2 border-emerald-200">
+                        {word}
+                    </span>
+                );
+            }
+
+            return <span key={idx} className="inline-block mx-0.5">{word}</span>;
+        });
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
             <div className="bg-white dark:bg-gray-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col">
@@ -42,10 +79,14 @@ export const FeedbackReport: React.FC<Props> = ({ data, mediaUrl, onDownload, on
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
                             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                <span className="text-2xl">📝</span> Transcript
+                                <span className="text-2xl">📝</span> Smart Transcript
                             </h3>
                             <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-2xl text-lg leading-relaxed text-gray-700 dark:text-gray-300 font-serif h-64 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-gray-700">
-                                 "{data.transcript || "No speech detected..."}"
+                                {renderTranscript()}
+                            </div>
+                            <div className="mt-2 text-xs text-gray-400 flex gap-4">
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Mistake/Weakness</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Advanced Vocab</span>
                             </div>
                         </div>
                         
@@ -68,15 +109,17 @@ export const FeedbackReport: React.FC<Props> = ({ data, mediaUrl, onDownload, on
                         <div>
                             <h3 className="text-lg font-bold mb-4 text-red-500 flex items-center gap-2">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                Detected Issues
+                                Detailed Issues
                             </h3>
                             {data.mistakes.length === 0 ? (
                                 <p className="text-green-600 italic">No major algorithmic errors detected. Good job!</p>
                             ) : (
-                                <ul className="space-y-3">
+                                <ul className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {data.mistakes.map((m, i) => (
                                         <li key={i} className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border-l-4 border-red-500">
-                                            <span className="block text-xs font-bold uppercase text-red-500 mb-1">{m.type}</span>
+                                            <div className="flex justify-between items-start">
+                                                <span className="block text-xs font-bold uppercase text-red-500 mb-1">{m.type}</span>
+                                            </div>
                                             <p className="font-semibold text-gray-800 dark:text-gray-200">"{m.text}"</p>
                                             <p className="text-sm text-gray-600 dark:text-gray-400">{m.issue}</p>
                                         </li>

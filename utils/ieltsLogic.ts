@@ -20,12 +20,13 @@ const ADVANCED_VOCAB = new Set([
     'productivity', 'ritual', 'artisanal', 'replicate', 'synchronization', 'inevitable',
     'fundamental', 'consequently', 'furthermore', 'nevertheless', 'predominantly',
     'substantially', 'aesthetic', 'pragmatic', 'tedious', 'monotonous', 'invigorating',
-    'nostalgic', 'reminiscent', 'impeccable', 'meticulous', 'spontaneous', 'deliberate'
+    'nostalgic', 'reminiscent', 'impeccable', 'meticulous', 'spontaneous', 'deliberate',
+    'crucial', 'significant', 'aspect', 'perspective', 'notion', 'controversial'
 ]);
 
 // Weak/Overused words (Band 4-5)
 const BASIC_VOCAB = new Set([
-    'good', 'bad', 'nice', 'happy', 'sad', 'big', 'small', 'thing', 'stuff', 'very', 'really', 'like'
+    'good', 'bad', 'nice', 'happy', 'sad', 'big', 'small', 'thing', 'stuff', 'very', 'really', 'like', 'lot', 'lots'
 ]);
 
 // Complex Grammar Patterns (Regex)
@@ -37,109 +38,135 @@ const GRAMMAR_PATTERNS = [
     { name: 'Concessive Clause', regex: /\b(although|even though|despite|however)\b/i }
 ];
 
+// Common Grammar Slips Regex
+const GRAMMAR_ERRORS = [
+    { regex: /\b(a)\s+[aeiou]/i, issue: "Incorrect article 'a' before vowel sound", fix: "an" },
+    { regex: /\b(an)\s+[bcdfghjklmnpqrstvwxyz]/i, issue: "Incorrect article 'an' before consonant", fix: "a" },
+    { regex: /\b(I|you|we|they)\s+is\b/i, issue: "Subject-verb agreement error", fix: "are/am" },
+    { regex: /\b(he|she|it)\s+have\b/i, issue: "Subject-verb agreement error", fix: "has" },
+    { regex: /\b(much)\s+(people|cars|books)\b/i, issue: "Quantifier error with countable noun", fix: "many" },
+    { regex: /\b(less)\s+(people|cars|books)\b/i, issue: "Quantifier error with countable noun", fix: "fewer" },
+];
+
 export const analyzeSpeech = (transcript: string, durationSeconds: number): FeedbackResult => {
-    const words = transcript.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "").split(/\s+/);
+    // Basic cleanup for analysis
+    const cleanTranscript = transcript.trim();
+    const lowerTranscript = cleanTranscript.toLowerCase();
+    const words = lowerTranscript.replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "").split(/\s+/);
     const wordCount = words.length;
-    const wpm = Math.round((wordCount / durationSeconds) * 60);
+    const wpm = Math.round((wordCount / (durationSeconds || 1)) * 60);
+
+    const mistakes: { text: string; issue: string; type: 'grammar' | 'vocab' | 'fluency' }[] = [];
 
     // 1. FLUENCY & COHERENCE (FC)
-    // Examiners look for: Speed, Hesitation, Self-correction.
     let fcScore = 5.0;
-    const fillers = words.filter(w => ['um', 'uh', 'ah', 'like', 'you know', 'sort of'].includes(w)).length;
+    const fillers = words.filter(w => ['um', 'uh', 'ah', 'like', 'you know', 'sort of', 'kind of'].includes(w)).length;
     
     // WPM Scoring logic
-    if (wpm > 110) fcScore += 2; // Band 7+ speed
-    else if (wpm > 90) fcScore += 1; // Band 6 speed
-    else fcScore -= 1; // Slow
+    if (wpm > 120) fcScore += 2; 
+    else if (wpm > 100) fcScore += 1.5;
+    else if (wpm > 80) fcScore += 0.5;
+    else fcScore -= 0.5;
 
     // Penalty for fillers
     const fillerRatio = fillers / wordCount;
-    if (fillerRatio > 0.10) fcScore -= 1.5; // Frequent hesitation
-    else if (fillerRatio > 0.05) fcScore -= 0.5;
+    if (fillerRatio > 0.12) fcScore -= 1.5; 
+    else if (fillerRatio > 0.08) fcScore -= 0.5;
 
     fcScore = Math.min(9, Math.max(4, fcScore));
 
     // 2. LEXICAL RESOURCE (LR)
-    // Examiners look for: Range, Collocation, Less common items.
     let lrScore = 5.0;
     const usedAdvanced = words.filter(w => ADVANCED_VOCAB.has(w));
     const usedBasic = words.filter(w => BASIC_VOCAB.has(w));
     
-    // Repetition check
+    // Repetition check (exclude common small words)
     const wordFreq: Record<string, number> = {};
-    words.forEach(w => { if(w.length > 3) wordFreq[w] = (wordFreq[w] || 0) + 1; });
+    words.forEach(w => { 
+        if(w.length > 4) wordFreq[w] = (wordFreq[w] || 0) + 1; 
+    });
     const repeated = Object.keys(wordFreq).filter(w => wordFreq[w] > 2);
 
-    if (usedAdvanced.length > 4) lrScore += 3; // Strong vocab
+    if (usedAdvanced.length > 5) lrScore += 3; 
     else if (usedAdvanced.length > 2) lrScore += 1.5;
     
-    if (usedBasic.length > 5) lrScore -= 1; // Limited range
+    if (usedBasic.length > 6) lrScore -= 1;
 
     lrScore = Math.min(9, Math.max(4, lrScore));
 
     // 3. GRAMMATICAL RANGE & ACCURACY (GRA)
-    // Examiners look for: Sentence complexity, Error free sentences.
     let graScore = 5.0;
     const foundStructures = GRAMMAR_PATTERNS.filter(p => p.regex.test(transcript)).map(p => p.name);
     
-    if (foundStructures.length >= 3) graScore += 3; // Band 7+ Range
-    else if (foundStructures.length >= 2) graScore += 1.5; // Band 6 Range
+    // Check specific grammar errors
+    GRAMMAR_ERRORS.forEach(err => {
+        const match = transcript.match(err.regex);
+        if (match) {
+            mistakes.push({ 
+                text: match[0], 
+                issue: `${err.issue}. Try '${err.fix}'.`, 
+                type: 'grammar' 
+            });
+            graScore -= 0.5;
+        }
+    });
 
-    // Approximation: Longer sentences usually imply better structure in fluid speech
-    const avgWordLen = transcript.length / (words.length || 1);
-    if (avgWordLen > 4.5) graScore += 0.5;
+    if (foundStructures.length >= 4) graScore += 3;
+    else if (foundStructures.length >= 2) graScore += 1.5;
 
-    graScore = Math.min(9, Math.max(4, graScore));
+    const avgWordLen = cleanTranscript.length / (words.length || 1);
+    if (avgWordLen > 5) graScore += 0.5;
+
+    graScore = Math.min(9, Math.max(3, graScore));
 
     // 4. PRONUNCIATION (P)
-    // Offline approximation based on fluency and utterance length (chunking).
-    // In real exam: Intonation, stress, sounds.
-    // Here: Smoothness serves as proxy.
-    let pScore = fcScore * 0.8 + (usedAdvanced.length > 0 ? 1 : 0); 
+    // Approximate based on lack of pauses (inferred from WPM) and complexity
+    let pScore = fcScore * 0.7 + (usedAdvanced.length > 1 ? 1.5 : 0.5); 
     pScore = Math.min(9, Math.max(4, pScore));
 
-    // GENERATE MISTAKES / FEEDBACK
-    const mistakes = [];
-    
-    if (fillerRatio > 0.08) {
-        mistakes.push({ text: "High usage of fillers", issue: "You used 'um', 'like', or 'uh' too frequently. Pause silently instead.", type: 'fluency' as const });
+    // POPULATE MISTAKES LIST
+    if (fillerRatio > 0.1) {
+        mistakes.push({ text: "Filler words", issue: "High usage of 'um', 'uh', 'like'.", type: 'fluency' });
     }
-    if (wpm < 90) {
-        mistakes.push({ text: "Slow Speech Rate", issue: "Your pace is below 90 WPM. Aim for a continuous flow.", type: 'fluency' as const });
+    if (wpm < 80) {
+        mistakes.push({ text: "Slow pace", issue: "Speech rate < 80 WPM.", type: 'fluency' });
     }
     repeated.forEach(word => {
-        mistakes.push({ text: word, issue: `You repeated '${word}' ${wordFreq[word]} times. Use synonyms.`, type: 'vocab' as const });
+        mistakes.push({ text: word, issue: `Repeated '${word}' ${wordFreq[word]} times.`, type: 'vocab' });
     });
-    if (foundStructures.length < 2) {
-        mistakes.push({ text: "Simple Sentences", issue: "Try using 'If', 'Although', or 'Which' to connect ideas.", type: 'grammar' as const });
-    }
+    usedBasic.forEach(word => {
+        // Only flag if used excessively, but here we flag first instance to be strict
+        if (!mistakes.some(m => m.text === word)) {
+             mistakes.push({ text: word, issue: "Basic vocabulary. Try a more precise synonym.", type: 'vocab' });
+        }
+    });
 
     const overallBand = ((fcScore + lrScore + graScore + pScore) / 4).toFixed(1);
 
     return {
         overallBand,
-        transcript,
+        transcript: cleanTranscript,
         criteria: {
             fc: { 
                 score: Math.round(fcScore * 2) / 2, 
-                feedback: fcScore > 7 ? "Excellent continuous flow." : "Try to reduce hesitation.",
+                feedback: fcScore > 7 ? "Fluid and coherent." : "Noticeable hesitation.",
                 wpm,
                 fillers
             },
             lr: { 
                 score: Math.round(lrScore * 2) / 2, 
-                feedback: usedAdvanced.length > 2 ? "Good use of less common items." : "Vocabulary is functional but limited.",
+                feedback: usedAdvanced.length > 3 ? "Wide range of vocabulary." : "Limited lexical resource.",
                 advancedWordsUsed: [...new Set(usedAdvanced)],
                 repeatedWords: repeated
             },
             gra: { 
                 score: Math.round(graScore * 2) / 2, 
-                feedback: foundStructures.length > 2 ? "Good range of complex structures." : "Reliant on simple sentence forms.",
+                feedback: foundStructures.length > 2 ? "Complex structures used effectively." : "Simple sentence structures dominant.",
                 complexStructures: foundStructures
             },
             p: { 
                 score: Math.round(pScore * 2) / 2, 
-                feedback: "Pronunciation estimated based on flow and clarity."
+                feedback: "Estimated based on fluency metrics."
             }
         },
         mistakes

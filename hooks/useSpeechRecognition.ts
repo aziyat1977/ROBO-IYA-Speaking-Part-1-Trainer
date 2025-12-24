@@ -23,14 +23,26 @@ export const useSpeechRecognition = () => {
             recognition.lang = 'en-US';
 
             recognition.onresult = (event: any) => {
-                let finalTrans = '';
+                let finalChunk = '';
+                
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        finalTrans += event.results[i][0].transcript + ' ';
+                        let text = event.results[i][0].transcript.trim();
+                        if (text.length > 0) {
+                            // Auto-formatting: Capitalize first letter
+                            text = text.charAt(0).toUpperCase() + text.slice(1);
+                            
+                            // Heuristic: Add period if it doesn't end with punctuation
+                            if (!/[.!?]$/.test(text)) {
+                                text += '.';
+                            }
+                            finalChunk += text + ' ';
+                        }
                     }
                 }
-                if (finalTrans) {
-                    setTranscript(prev => prev + finalTrans);
+
+                if (finalChunk) {
+                    setTranscript(prev => prev + finalChunk);
                 }
             };
 
